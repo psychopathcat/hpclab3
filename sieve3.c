@@ -140,9 +140,7 @@ int main (int argc, char *argv[])
     if (p > 1)
         MPI_Reduce(&count, &global_count, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
 
-        /* Stop the timer */
-
-   elapsed_time += MPI_Wtime();
+       
 
 
    /* Print the results */
