@@ -56,18 +56,16 @@ int main (int argc, char *argv[])
       well as the integers represented by the first and
       last array elements */
 
-   /* Stop the timer */
-
-   elapsed_time += MPI_Wtime();
-
-   /* Add you code here  */
    low_value = 2 + id * (n - 1) / p;
    high_value = 1 + (id + 1) * (n - 1) / p;
    low_value = low_value + (low_value + 1) % 2;
    high_value = high_value - (high_value + 1) % 2;
    size = (high_value - low_value) / 2 + 1;
    local_prime_size = (int)sqrt((double)n) - 1;
-   // p0 holds all used prime
+
+   /* Bail out if all the primes used for sieving are
+	  not all held by process 0 */
+
    proc0_size = (n - 1) / p;
 
    if ((2 + proc0_size) < (int)sqrt((double)n)) {
@@ -75,7 +73,9 @@ int main (int argc, char *argv[])
 	   MPI_Finalize();
 	   exit(1);
    }
-   // Allocate
+
+   /* Allocate this process's share of the array. */
+
    marked = (char*)malloc(size);
    local_prime_marked = (char*)malloc(local_prime_size);
 
@@ -84,63 +84,61 @@ int main (int argc, char *argv[])
 	   MPI_Finalize();
 	   exit(1);
    }
-   // core
+
    local_prime = 2;
-    for (i = 0; i < local_prime_size; i++)
-        local_prime_marked[i] = 0;
-    index = 0;
-    do
-    {
-        local_first = local_prime * local_prime - 2;
-        for (i = local_first; i < local_prime_size; i += local_prime)
-            local_prime_marked[i] = 1;
-        while (local_prime_marked[++index] == 1);
-        local_prime = 2 + index;
-    } while (local_prime * local_prime <= n);
-    
+   for (i = 0; i < local_prime_size; i++) {
+	   local_prime_marked[i] = 0;
+   }
+   index = 0;
+   do {
+	   local_first = local_prime * local_prime - 2;
+	   for (i = local_first; i < local_prime_size; i += local_prime)
+		   local_prime_marked[i] = 1;
+	   while (local_prime_marked[++index] == 1);
+	   local_prime = 2 + index;
+	}while (local_prime * local_prime <= n);
 
-    for (i = 0; i < size; i++)
-        marked[i] = 0;
+   for (i = 0; i < size; i++) marked[i] = 0;
 
-    unsigned long int block_size = 1048576;
-    unsigned long long int block_low_value = low_value;
-    unsigned long long int block_high_value = block_low_value + 2 * (block_size - 1);
-    
-    do
-    {
-        index = 0;
-        prime = 3;
-        while (prime * prime <= block_high_value)
-        {
-            if (prime * prime > block_low_value)
-                first = (prime * prime - block_low_value) / 2;
-            else
-            {
-                if ((block_low_value % prime) == 0)
-                    first = 0;
-                else
-                    first = (prime - (block_low_value % prime) + block_low_value / prime % 2 * prime) / 2;
-            }
-            for (i = first + (block_low_value - low_value) / 2; i <= (block_high_value - low_value) / 2; i += prime)
-                marked[i] = 1;
-            while(local_prime_marked[++index] == 1);
-            prime = index + 2;
-        }
-        block_low_value = block_high_value + 2;
-        block_high_value = block_low_value + 2 * (block_size - 1);
-        if (block_high_value > high_value)
-            block_high_value = high_value;
-    } while (block_low_value <= high_value);
-    count = 0;
-    for (i = 0; i < size; i++)
-        if (marked[i] == 0)
-            count++;
-    if (id == 0)
-        count++;    
-    if (p > 1)
-        MPI_Reduce(&count, &global_count, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+   unsigned long int block_size = 1048576;
+   unsigned long long int block_low_value = low_value;
+   unsigned long long int block_high_value = block_low_value + 2 * (block_size - 1);
+   
+   do {
+	   index = 0;
+	   prime = 3;
+	   while (prime * prime <= block_high_value)
+	   {
+		   if (prime * prime > block_low_value)
+			   first = (prime * prime - block_low_value) / 2;
+		   else
+		   {
+			   if ((block_low_value % prime) == 0)
+				   first = 0;
+			   else
+				   first = (prime - (block_low_value % prime) + block_low_value / prime % 2 * prime) / 2;
+		   }
+		   for (i = first + (block_low_value - low_value) / 2; i <= (block_high_value - low_value) / 2; i += prime)
+			   marked[i] = 1;
+		   while (local_prime_marked[++index] == 1);
+		   prime = index + 2;
+	   }
+	   block_low_value = block_high_value + 2;
+	   block_high_value = block_low_value + 2 * (block_size - 1);
+	   if (block_high_value > high_value)
+		   block_high_value = high_value;
+   } while (block_low_value <= block_high_value);
+   count = 0;
+   for (i = 0; i < size; i++)
+	   if (!marked[i]) count++;
+   if (id == 0)
+	   count++;  //plus prime 2
+   if (p > 1)
+	   MPI_Reduce(&count, &global_count, 1, MPI_INT, MPI_SUM,
+		   0, MPI_COMM_WORLD);
+   /* Stop the timer */
 
-       
+   elapsed_time += MPI_Wtime();
 
 
    /* Print the results */
